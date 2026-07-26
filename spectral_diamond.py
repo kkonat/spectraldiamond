@@ -16,6 +16,7 @@ Usage:
     python spectral_diamond.py --preview                # 192px, 12spp, ~5s
     python spectral_diamond.py --ambient 0 --lights 1   # black void, max colour
     python spectral_diamond.py --anim spin.mp4          # 60-frame rotation (ffmpeg)
+    python spectral_diamond.py --top                    # straight-down table view
 
 Lighting note: --ambient trades colour saturation against readability. Measured
 at 224px/24spp, 3 lights:
@@ -235,7 +236,12 @@ def render(W, H, spp, bounces, seed, fire, azim, elev, dist, fov, chunk,
     look = np.array([0.0, -0.035, 0.0], F)
     fwd = look - eye
     fwd /= np.linalg.norm(fwd)
-    right = np.cross(fwd, np.array([0, 1, 0], F))
+    # world-up as the roll reference, but that degenerates when looking
+    # straight down (top view): fall back to +Z so `right` stays well-defined.
+    world_up = np.array([0, 1, 0], F)
+    if abs(float(fwd @ world_up)) > 0.999:
+        world_up = np.array([0, 0, 1], F)
+    right = np.cross(fwd, world_up)
     right /= np.linalg.norm(right)
     up = np.cross(right, fwd)
     scale = F(np.tan(np.radians(fov * 0.5)))
@@ -365,6 +371,8 @@ def main():
     p.add_argument("--hdr", help="also save raw linear radiance as .npy")
     p.add_argument("--preview", action="store_true",
                    help="fast 192px / 12spp preview")
+    p.add_argument("--top", action="store_true",
+                   help="top-down view (looks straight down at the table)")
     p.add_argument("--anim", metavar="OUT.mp4",
                    help="render a rotation animation to this .mp4 (needs ffmpeg)")
     p.add_argument("--anim-frames", type=int, default=60,
@@ -376,6 +384,8 @@ def main():
     a = p.parse_args()
     if a.preview:
         a.width, a.spp = 192, 12
+    if a.top:
+        a.elevation = 90.0
     global AMBIENT, NLIGHTS
     AMBIENT, NLIGHTS = a.ambient, a.lights
 
